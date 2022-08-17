@@ -9,18 +9,20 @@
 #include <stdexcept>
 #include <cmath>
 #include <ctime>
+#include <limits>
+#include <random>
 #include <SDL.h>
 #include <SDL_net.h>
 
-// System and Timer
+// System, Timer, and Random
 //{
 /**
  * A namespace for initialisation and shutdown functions.
  */
 namespace System {
 	// The current version of the library.
-	constexpr int VERSION[] = {2, 0, 0, 0};
 	constexpr int VERSION_LENGTH = 4;
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 0};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -44,7 +46,7 @@ namespace System {
 		| SDL_INIT_NOPARACHUTE
 	);
 	
-	/**
+    /**
 	 * Returns the version in string form.
 	 */
 	std::string version(
@@ -100,8 +102,8 @@ namespace System {
 	/**
 	 * Sends the given command to the command line.
 	 */
-	void command(const std::string& command_string) noexcept {
-		system(command_string.c_str());
+	int command(const std::string& command_string) noexcept {
+		return system(command_string.c_str());
 	}
 }
 
@@ -152,6 +154,61 @@ namespace Timer {
 			+ seconds
 		;
 	}
+}
+
+/**
+ * A namespace for RNG functions.
+ */
+namespace Random {
+    #define RANDOM_ASSERTION (min > max)
+    constexpr const char* RANDOM_ERROR = "min > max is undefined.";
+    
+	/**
+	 * A function that returns a random integer in the interval [min, max].
+	 * This function is a cross-platform replacement for std::uniform_int_distribution.
+	 */
+	int get_int(std::mt19937& generator, int min, int max) {
+        if (RANDOM_ASSERTION) {
+            throw std::runtime_error(RANDOM_ERROR);
+        }
+        
+		return min + generator() % static_cast<unsigned>(1 + max - min);
+	}
+	
+	/**
+	 * A function that returns a random real number in the interval [min, max).
+	 * This function is a cross-platform replacement for std::uniform_real_distribution.
+	 */
+	double get_real(std::mt19937& generator, double min, double max) {
+        if (RANDOM_ASSERTION) {
+            throw std::runtime_error(RANDOM_ERROR);
+        }
+        
+		return
+			min
+			+ (max - min)
+			* generator()
+			/ (1 + static_cast<double>(std::numeric_limits<unsigned>::max()))
+		;
+	}
+	
+	/**
+	 * A function that returns a random real number in the interval [min, max].
+	 */
+	double get_double(std::mt19937& generator, double min, double max) {
+        if (RANDOM_ASSERTION) {
+            throw std::runtime_error(RANDOM_ERROR);
+        }
+        
+		return
+			min
+			+ (max - min)
+			* generator()
+			/ static_cast<double>(std::numeric_limits<unsigned>::max())
+		;
+	}
+    
+    #undef RANDOM_ASSERTION
 }
 //}
 
@@ -298,6 +355,8 @@ class Point {
 
 /**
  * A namespace for event handling functions.
+ * Contains aliases for various mouse buttons and keyboard scan codes.
+ * The Event class is the preferred method for event handling.
  */
 namespace Events {
 	// For use with mouse click functions.
@@ -528,6 +587,191 @@ bool Point::click(int button = Events::LEFT_CLICK) noexcept {
 bool Point::unclick(int button = Events::LEFT_CLICK) noexcept {
 	return Events::unclick(button, *this);
 }
+
+/**
+ * A class that defines an event.
+ * This is the preferred method for event handling.
+ */
+class Event {
+    public:
+        /**
+         * Defines different types of event.
+         */
+        enum Type {
+            MISCELLANEOUS,
+            TERMINATE,
+            KEY_PRESS,
+            KEY_RELEASE,
+            MOUSE_MOTION,
+            LEFT_CLICK,
+            LEFT_UNCLICK,
+            MIDDLE_CLICK,
+            MIDDLE_UNCLICK,
+            RIGHT_CLICK,
+            RIGHT_UNCLICK,
+            SCROLL,
+            RESIZE
+        };
+        
+        /**
+         * Creates an uninitialised event.
+         */
+        Event() noexcept {}
+        
+        /**
+         * Sets the event to the oldest event in the event queue.
+         * The event is removed.
+         * Returns false if the event queue is empty.
+         */
+        bool poll() noexcept {
+            bool pending = SDL_PollEvent(&event);
+            type_ = determine();
+            
+            return pending;
+        }
+        
+        /**
+         * Sets the event to the oldest event in the event queue.
+         * The event is removed.
+         * Halts thread execution while the event queue is empty.
+         * Throws an exception upon error.
+         */
+        void wait() {
+            bool error = !SDL_WaitEvent(&event);
+            
+            if (error) {
+                throw std::runtime_error(SDL_GetError());
+            }
+            
+            type_ = determine();
+        }
+        
+        /**
+         * Sets the event to the oldest event in the event queue.
+         * The event is removed.
+         * Halts thread execution while the event queue is
+         *   empty for the time given (in milliseconds).
+         * Returns false if time ran out or an error occurred.
+         */
+        bool timed_wait(int ms) noexcept {
+            bool pending = SDL_WaitEventTimeout(&event, ms);
+            type_ = determine();
+            
+            return pending;
+        }
+        
+        /**
+         * Returns the type of event.
+         */
+        Type type() const noexcept {
+            return type_;
+        }
+        
+        /**
+         * Returns the key of the keyboard event.
+         */
+        int key() const noexcept {
+            return event.key.keysym.scancode;
+        }
+        
+        /**
+         * Returns the relative position of the mouse since the last motion.
+         */
+        Point motion() const noexcept {
+            return Point(event.motion.xrel, event.motion.yrel);
+        }
+        
+        /**
+         * Returns the relative scroll of the mouse wheel.
+         */
+        Point scroll() const noexcept {
+            int normal = event.wheel.direction == SDL_MOUSEWHEEL_NORMAL ? 1 : -1;
+            
+            return Point(normal * event.wheel.x, normal * event.wheel.y);
+        }
+        
+        /**
+         * Returns the coordinates of a motion event.
+         */
+        Point motion_position() const noexcept {
+            return Point(event.motion.x, event.motion.y);
+        }
+        
+        /**
+         * Returns the coordinates of a click/unclick event.
+         */
+        Point click_position() const noexcept {
+            return Point(event.button.x, event.button.y);
+        }
+    
+    private:
+        /**
+         * Determines the event's type.
+         */
+        Type determine() const noexcept {
+            switch (event.type) {
+                case SDL_WINDOWEVENT:
+                    switch (event.window.event) {
+                        case SDL_WINDOWEVENT_CLOSE:
+                            return TERMINATE;
+                        
+                        case SDL_WINDOWEVENT_SIZE_CHANGED:
+                            return RESIZE;
+                        
+                        default:
+                            return MISCELLANEOUS;
+                    }
+                
+                case SDL_KEYDOWN:
+                    return KEY_PRESS;
+                    
+                case SDL_KEYUP:
+                    return KEY_RELEASE;
+                
+                case SDL_MOUSEMOTION:
+                    return MOUSE_MOTION;
+                
+                case SDL_MOUSEBUTTONDOWN:
+                    switch (event.button.button) {
+                        case SDL_BUTTON_LEFT:
+                            return LEFT_CLICK;
+                        
+                        case SDL_BUTTON_MIDDLE:
+                            return MIDDLE_CLICK;
+                        
+                        case SDL_BUTTON_RIGHT:
+                            return RIGHT_CLICK;
+                        
+                        default:
+                            return MISCELLANEOUS;
+                    }
+                
+                case SDL_MOUSEBUTTONUP:
+                    switch (event.button.button) {
+                        case SDL_BUTTON_LEFT:
+                            return LEFT_UNCLICK;
+                        
+                        case SDL_BUTTON_MIDDLE:
+                            return MIDDLE_UNCLICK;
+                        
+                        case SDL_BUTTON_RIGHT:
+                            return RIGHT_UNCLICK;
+                        
+                        default:
+                            return MISCELLANEOUS;
+                    }
+                
+                case SDL_MOUSEWHEEL:
+                    return SCROLL;
+                
+                default:
+                    return MISCELLANEOUS;
+            }
+        }
+        
+        SDL_Event event; // The internal SDL Event.
+        Type type_; // The type of event.
+};
 //}
 
 // Messenger Classes
@@ -543,36 +787,50 @@ class Messenger {
 		 * Sends the string passed to the other messenger.
 		 * The string is padded to be of a specific length.
 		 */
-		void send(std::string message, int length = -1) const noexcept {
+		void send(std::string message, int length = -1) const {
+            // If the socket has not been initialised, an exception is thrown.
+            if (!socket) {
+                throw std::runtime_error("Uninitialised socket.");
+            }
+            
+            // If the string's length is unspecified or invalid, the default length is used.
 			if (length < 0) {
 				length = padding;
 			}
+            
+            // The message is padded to match the given length - 1.
+            // length - 1, because c_str() appends the string with '\0' for the full length.
+            message += std::string(length - message.length() - 1, padder);
 			
-			while (message.length() < length - 1) {
-				message += padder;
-			}
-			
-			SDLNet_TCP_Send(socket, message.c_str(), message.length() + 1);
+            // The message is sent in byte form.
+			SDLNet_TCP_Send(socket, message.c_str(), length);
 		}
 		
 		/**
 		 * Receives a string from the other messenger.
 		 * A maximum number of bytes, equal to buffer_size, is read.
-		 * Uses C-style strings internally, so buffer_size,
-		 *   should be one greater than the length of the string sent.
+		 * Uses C-style strings internally, so buffer_size should
+		 *   be one greater than the length of the C++ string sent.
 		 */
-		std::string read(int buffer_size = DEFAULT_READ) const noexcept {
-			char* buffer = new char[buffer_size];
-			SDLNet_TCP_Recv(socket, buffer, buffer_size);
-			std::string message(buffer);
-			delete[] buffer;
-			return message;
+		std::string read(int buffer_size = DEFAULT_READ) const {
+            // If the socket has not been initialised, an exception is thrown.
+            if (!socket) {
+                throw std::runtime_error("Uninitialised socket.");
+            }
+            
+            // A vector is used to store the received message.
+			std::vector<char> buffer(buffer_size);
+            
+            // The message is received and stored in the vector.
+			SDLNet_TCP_Recv(socket, buffer.data(), buffer_size);
+            
+            // A C++ string is formed from the received message and returned.
+			return std::string(buffer.data());
 		}
 
-		// The default maximum number of characters read by read().
-		static constexpr int DEFAULT_READ = 1000;
-		static constexpr int DEFAULT_PADDING = DEFAULT_READ;
-		static constexpr char DEFAULT_PADDER = '\0';
+		static constexpr int DEFAULT_READ = 100; // Default max for read().
+		static constexpr int DEFAULT_PADDING = DEFAULT_READ; // Default min for send().
+		static constexpr char DEFAULT_PADDER = '\0'; // Default padder for send().
 		
 	protected:
 		/**
@@ -583,7 +841,7 @@ class Messenger {
 			padder(padder)
 		{}
 		
-		TCPsocket socket;  // The TCP socket used for the connection.
+		TCPsocket socket = nullptr;  // The TCP socket used for the connection.
 		int padding; // The minimum width of messages sent by default.
 		char padder; // The character used to pad the messages sent.
 };
@@ -591,8 +849,13 @@ class Messenger {
 /**
  * A Messenger subclass for the server.
  */
-class Server: public Messenger {
+class Server: public virtual Messenger {
 	public:
+        /**
+         * Constructs an uninitialised Server to be initialised later.
+         */
+        Server() noexcept {}
+    
 		/**
 		 * Constructs a new TCP messenger for the server.
 		 * The server is hosted at localhost:[port].
@@ -617,7 +880,7 @@ class Server: public Messenger {
 			
 			// Halts the thread execution until the client connects.
 			// If cancel is true, an exception is thrown.
-			// This exception can allow for the 
+			// This exception can allow for the Server construcion to be cancelled.
 			while (!(socket = SDLNet_TCP_Accept(server))) {
 				if (cancel) {
 					SDLNet_TCP_Close(server);
@@ -679,15 +942,20 @@ class Server: public Messenger {
 			}
 		}
 		
-		TCPsocket server;       // The TCP socket used for to accept the client.
+		TCPsocket server = nullptr; // The TCP socket used for to accept the client.
 		bool allocated = false; // True if the sockets should be closed by this instance.
 };
 
 /**
  * A Messenger subclass for the client.
  */
-class Client: public Messenger {
+class Client: public virtual Messenger {
 	public:
+        /**
+         * Constructs an uninitialised Client to be initialised later.
+         */
+        Client() noexcept {}
+        
 		/**
 		 * Constructs a new TCP messenger for the client.
 		 * The client connects to the server at [address]:[port].
@@ -915,14 +1183,14 @@ class ServerPackage {
  *   two Server instances, which can be useful if the two parties
  *   are unable to perform port forwarding (but a third party is able to).
  */
-class ClientPackage {
+class Bridge {
 	public:
 		/**
 		 * Takes constant references to the messengers forming the bridge.
 		 * Also takes a string, which will terminate the thread static
 		 *   method, if the source sends it to the destination.
 		 */
-		ClientPackage(
+		Bridge(
 			const Messenger& s,
 			const Messenger& d,
 			const std::string& t
@@ -960,7 +1228,7 @@ class ClientPackage {
 		 */
 		static int make_bridge(void* data) noexcept {
 			// The package is extracted.
-			ClientPackage& package = *static_cast<ClientPackage*>(data);
+			Bridge& package = *static_cast<Bridge*>(data);
 			const Messenger& source = package.get_source();
 			const Messenger& destination = package.get_destination();
 			std::string terminator(package.get_terminator());
@@ -1462,8 +1730,14 @@ class Sprite {
 		 * The Sprite is loaded from the BMP file passed in
 		 *   string form and is not scaled.
 		 */
-		Sprite(const std::string& source) noexcept {
+		Sprite(const std::string& source) {
 			surface = SDL_LoadBMP(source.c_str());
+            
+            // An exception is thrown, if the surface couldn't be loaded.
+            if (!surface) {
+                throw std::runtime_error(source + " could not be opened.");
+            }
+            
 			allocated = true;
 		}
 		
@@ -1472,13 +1746,38 @@ class Sprite {
 		 * The Sprite is loaded from the BMP file passed in
 		 *   string form and scaled to the given dimensions.
 		 */
-		Sprite(const std::string& source, int width, int height) noexcept {
+		Sprite(const std::string& source, int width, int height) {
 			SDL_Surface* raw_surface = SDL_LoadBMP(source.c_str());
+            
+            // An exception is thrown, if the surface couldn't be loaded.
+            if (!raw_surface) {
+                throw std::runtime_error(source + " could not be opened.");
+            }
+            
 			create_surface(width, height);
 			SDL_BlitScaled(raw_surface, nullptr, surface, nullptr);
 			SDL_FreeSurface(raw_surface);
 		}
 		
+        /**
+		 * Constructs a new Sprite object.
+		 * The Sprite is loaded from the BMP file passed in
+		 *   string form and scaled to the given dimensions.
+         * The size of the sprite is a ratio of the given sprite.
+		 */
+        Sprite(
+            const std::string& source,
+            const Sprite& stemplate,
+            double width,
+            double height
+        ):
+            Sprite(
+                source,
+                width * stemplate.width(),
+                height * stemplate.height()
+            )
+        {}
+        
 		/**
 		 * Copying a sprite can be done safely using blitting.
 		 */
@@ -1838,7 +2137,7 @@ class Display: public Sprite {
 				height = display_mode.h;
 			}
 			
-			create_window("", width, height, SDL_WINDOW_SHOWN);
+			create_window("", width, height, 0);
 		}
 		
 		/**
@@ -1856,7 +2155,7 @@ class Display: public Sprite {
 				height = display_mode.h;
 			}
 			
-			create_window(title, width, height, SDL_WINDOW_SHOWN);
+			create_window(title, width, height, 0);
 		}
 		
 		/**
@@ -1873,7 +2172,7 @@ class Display: public Sprite {
 				"",
 				width * display_mode.w,
 				height * display_mode.h,
-				SDL_WINDOW_SHOWN
+				0
 			);
 		}
 		
@@ -1891,7 +2190,7 @@ class Display: public Sprite {
 				title,
 				width * display_mode.w,
 				height * display_mode.h,
-				SDL_WINDOW_SHOWN
+				0
 			);
 		}
 		
@@ -1992,6 +2291,14 @@ class Display: public Sprite {
 			return *this;
 		}
 		
+        /**
+         * Reallocates the window (usually after a resize).
+         */
+        void resize() noexcept {
+            destroy_window();
+            create_window(title, width, height, flags);
+        }
+        
 	private:
 		/**
 		 * Creates the window and its sprite.
@@ -2005,13 +2312,17 @@ class Display: public Sprite {
 			int height,
 			Uint32 flags
 		) noexcept {
+            this->title = title;
+            this->width = width;
+            this->height = height;
+            this->flags = flags;
 			window = SDL_CreateWindow(
 				title.c_str(),
 				SDL_WINDOWPOS_UNDEFINED,
 				SDL_WINDOWPOS_UNDEFINED,
 				width,
 				height,
-				flags
+				flags | DEFAULT_FLAGS
 			);
 			Sprite::operator=(SDL_GetWindowSurface(window));
 			window_allocated = true;
@@ -2027,13 +2338,20 @@ class Display: public Sprite {
 			}
 		}
 		
+        static constexpr Uint32 DEFAULT_FLAGS =
+            SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+        ; // The default window flags used for window creation.
 		SDL_Window* window;            // The window for the display.
 		bool window_allocated = false; // True if this class allocated memory for the window.
+        std::string title;
+        int width;
+        int height;
+        Uint32 flags;
 };
 
 /**
  * A class that manages the audio system.
- * Each instance of this class corresponds to an audio clip.
+ * Each instance of this class corresponds to an audio segment and device.
  */
 class Audio {
 	public:
@@ -2042,7 +2360,7 @@ class Audio {
 		 * Can requeue whenever one wishes to do so.
 		 * The audio is unpaused by default.
 		 */
-		Audio(const std::string& source) noexcept {
+		Audio(const std::string& source) {
 			load(source);
 			SDL_PauseAudioDevice(audio_device, false);
 		}
@@ -2052,7 +2370,7 @@ class Audio {
 		 * Stores the length of the song in seconds for requeuing.
 		 * The audio is unpaused by default.
 		 */
-		Audio(const std::string& source, double l) noexcept {
+		Audio(const std::string& source, double l) {
 			load(source);
 			SDL_PauseAudioDevice(audio_device, false);
 			length = l;
@@ -2193,9 +2511,13 @@ class Audio {
 		/**
 		 * Loads the song at the given source.
 		 */
-		void load(const std::string& source) noexcept {
+		void load(const std::string& source) {
 			SDL_AudioSpec audio_spec;
-			SDL_LoadWAV(source.c_str(), &audio_spec, &audio_buffer, &audio_length);
+            
+			if (!SDL_LoadWAV(source.c_str(), &audio_spec, &audio_buffer, &audio_length)) {
+                throw std::runtime_error(source + " could not be opened.");
+            }
+            
 			audio_device = SDL_OpenAudioDevice(nullptr, false, &audio_spec, nullptr, 0);
 			allocated = true;
 		}
@@ -2231,7 +2553,7 @@ class Audio {
 class Button {
 	public:
 		/**
-		 * Constructs a new Button object from given Sprite.
+		 * Constructs a new Button object from given copied Sprite.
 		 * The Rectangle is constructed at the given position
 		 *   and sets the dimensions to the sprite's dimensions.
 		 */
@@ -2241,7 +2563,7 @@ class Button {
 		{}
 		
 		/**
-		 * Constructs a new Button object from given Sprite.
+		 * Constructs a new Button object from given moved Sprite.
 		 * The Rectangle is constructed at the given position
 		 *   and sets the dimensions to the sprite's dimensions.
 		 */
@@ -2251,7 +2573,7 @@ class Button {
 		{}
 		
 		/**
-		 * Constructs a new Button object from the given Sprite.
+		 * Constructs a new Button object from the given copied Sprite.
 		 * The Rectangle is constructed with its dimensions set
 		 *   to the sprite's dimensions.
 		 * The Rectangle's position is set to mirror the effects
@@ -2273,7 +2595,7 @@ class Button {
 		{}
 		
 		/**
-		 * Constructs a new Button object from the given Sprite.
+		 * Constructs a new Button object from the given moved Sprite.
 		 * The Rectangle is constructed with its dimensions set
 		 *   to the sprite's dimensions.
 		 * The Rectangle's position is set to mirror the effects
@@ -2390,8 +2712,8 @@ class Renderer {
 			int width,
 			int height,
 			int x_separation = 0,
-			int max_width = 0,
 			int y_separation = 0,
+			int max_width = 0,
 			Justification justification = CENTRE_JUSTIFY
 		) const noexcept {
 			// If the text is empty an empty sprite is returned.
@@ -2527,6 +2849,7 @@ class Renderer {
 		 * The size (in pixels) of the characters must be specified.
 		 * The maximum width of the sprite and the space between lines can be defined.
 		 * The justification of the resulting sprite can be defined.
+		 * Uses ratios of the given sprite to determine the character size.
 		 */
 		Sprite lined_render(
 			const Sprite& ratio_base,
@@ -2534,8 +2857,8 @@ class Renderer {
 			double width,
 			double height,
 			double x_separation = 0,
-			double max_width = 0,
 			double y_separation = 0,
+			double max_width = 0,
 			Justification justification = CENTRE_JUSTIFY
 		) const noexcept {
 			return lined_render(
@@ -2543,8 +2866,8 @@ class Renderer {
 				width * ratio_base.width(),
 				height * ratio_base.height(),
 				x_separation * ratio_base.width(),
-				max_width * ratio_base.width(),
 				y_separation * ratio_base.height(),
+				max_width * ratio_base.width(),
 				justification
 			);
 		}
@@ -2765,14 +3088,12 @@ class FullRenderer: public Renderer {
 
 // Multithreading
 //{
+// Thread Primitives
+//{
 /**
  * Manages a separate thread of execution.
- * Useful for multi-threading, which allows multiple
- *   processes to be performed in tandem with each other
- *   boosting the computational efficiency of the program.
- * This is for use with 32-bit libraries, as they do not
- *   support std::thread.
- * If one uses a 64-bit library, use std::thread instead.
+ * This is for use with 32-bit libraries,
+ *   as they do not support std::thread.
  */
 class Thread {
 	public:
@@ -2863,153 +3184,522 @@ class Thread {
 	private:
 		SDL_Thread* thread = nullptr; // The thread of execution.
 };
+
+// Declaration for friendship declaration.
+class ConditionVariable;
+
+/**
+ * An abstraction of the mutex thread primitive.
+ */
+class Mutex {
+    // Condition variables are associated with a mutex when waiting.
+    friend class ConditionVariable;
+    
+    public:
+        /**
+         * Creates a new unlocked mutex.
+         * Throws an exception if the construction fails.
+         */
+        Mutex() {
+            if (!(mutex = SDL_CreateMutex())) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Destroys the mutex.
+         * The mutex should have been unlocked before destruction.
+         */
+        ~Mutex() noexcept {
+            SDL_DestroyMutex(mutex);
+        }
+        
+        /**
+         * Locks the mutex.
+         * Locks are recursive, so multiple locks by a single
+         *   thread will require the same number of unlocks.
+         * Locking a mutex locked by another thread will cause a block.
+         * Throws an exception if the mutex could not be locked.
+         */
+        void lock() {
+            if (SDL_LockMutex(mutex)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+            
+            ++locks;
+        }
+        
+        /**
+         * Locks the mutex, if it is unlocked or the calling thread owns the lock.
+         * Locks are recursive, so multiple locks by a single
+         *   thread will require the same number of unlocks.
+         * Locking a mutex locked by another thread will not cause a block.
+         * Returns true if the mutex was locked, false if the lock is
+         *   held by another thread, and throws an exception on error.
+         */
+        bool try_lock() {
+            int status = SDL_TryLockMutex(mutex);
+            
+            if (!status) {
+                ++locks;
+                return true;
+            }
+            
+            else if (status == SDL_MUTEX_TIMEDOUT) {
+                return false;
+            }
+            
+            else {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Attempts to unlock the mutex.
+         * Throws an exception on error.
+         * Throws an exception if the mutex was already unlocked.
+         */
+        void unlock() {
+            if (!locks) {
+                throw std::runtime_error("The mutex is not locked.");
+            }
+            
+            --locks;
+            
+            if (SDL_UnlockMutex(mutex)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Returns the number of recursive locks on the mutex.
+         */
+        int count_locks() const noexcept {
+            return locks;
+        }
+        
+    private:
+        SDL_mutex* mutex; // The pointer to the raw mutex.
+        int locks = 0; // The number of recursive locks made.
+};
+
+/**
+ * An abstraction of the semaphore thread primitive.
+ */
+class Semaphore {
+    public:
+        /**
+         * Creates a new mutex initialised with the given value.
+         * Throws an exception if the construction fails.
+         */
+        Semaphore(Uint32 value) {
+            if (!(semaphore = SDL_CreateSemaphore(value))) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Destroys the semaphore.
+         * The semaphore should not be waited on upon destruction.
+         */
+        ~Semaphore() noexcept {
+            SDL_DestroySemaphore(semaphore);
+        }
+        
+        /**
+         * Waits for the semaphore to have a positive value and decrements it.
+         * Throws an exception upon error.
+         */
+        void wait() {
+            if (SDL_SemWait(semaphore)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Decrements the value of the semaphore if it is positive.
+         * Returns true if the semaphore was decremented, false if the
+         *   semaphore had a non-positive value, and throws with an error.
+         * Does not wait for a positive value unlike wait().
+         */
+        bool try_wait() {
+            int status = SDL_SemTryWait(semaphore);
+            
+            if (!status) {
+                return true;
+            }
+            
+            else if (status == SDL_MUTEX_TIMEDOUT) {
+                return false;
+            }
+            
+            else {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Waits for a given amount of time in milliseconds for the
+         *   semaphore to have a positive value and decrements it.
+         * Returns true if the semaphore was decremented, false if
+         *   the semaphore timed out, and throws with an error.
+         */
+        bool timed_wait(Uint32 ms) {
+            int status = SDL_SemWaitTimeout(semaphore, ms);
+            
+            if (!status) {
+                return true;
+            }
+            
+            else if (status == SDL_MUTEX_TIMEDOUT) {
+                return false;
+            }
+            
+            else {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Increments the semaphore's value and waits waiting threads.
+         * Throws an exception upon error.
+         */
+        void post() {
+            if (SDL_SemPost(semaphore)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Returns the current value of the semaphore.
+         */
+        Uint32 get_value() noexcept {
+            return SDL_SemValue(semaphore);
+        }
+        
+    private:
+        SDL_sem* semaphore; // The pointer to the raw semaphore.
+};
+
+/**
+ * An abstraction of the condition variable thread primitive.
+ */
+class ConditionVariable {
+    public:
+        /**
+         * Creates a new condition variable.
+         * Throws if the condition variable could not be created.
+         */
+        ConditionVariable() {
+            if (!(condition_variable = SDL_CreateCond())) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Destroys the ocndition variable.
+         */
+        ~ConditionVariable() noexcept {
+            SDL_DestroyCond(condition_variable);
+        }
+        
+        /**
+         * Waits for the condition variable to be signalled.
+         * The given locked mutex is temporarily unlocked while waiting.
+         * Throws an exception upon error.
+         */
+        void wait(Mutex& mutex) {
+            if (SDL_CondWait(condition_variable, mutex.mutex)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Waits for a given number of milliseconds for
+         *   the condition variable to be signalled.
+         * The given locked mutex is temporarily unlocked while waiting.
+         * Returns true if the condition variable was signalled, false
+         *   if the time ran out, and throws an exception upon error.
+         */
+        bool timed_wait(Mutex& mutex, Uint32 ms) {
+            int status = SDL_CondWaitTimeout(condition_variable, mutex.mutex, ms);
+            
+            if (!status) {
+                return true;
+            }
+            
+            else if (status == SDL_MUTEX_TIMEDOUT) {
+                return false;
+            }
+            
+            else {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Signals one thread that is waiting on the condition variable.
+         * Throws an exception upon error.
+         */
+        void signal() {
+            if (SDL_CondSignal(condition_variable)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+        /**
+         * Signals all of the threads waiting on the condition variable.
+         * Throws an exception upon error.
+         */
+        void broadcast() {
+            if (SDL_CondBroadcast(condition_variable)) {
+                throw std::runtime_error(SDL_GetError());
+            }
+        }
+        
+    private:
+        SDL_cond* condition_variable; // The pointer to the raw condition variable.
+};
+//}
+
+// Utility
+//{
+/**
+ * A class for queuing audio in a separate thread of execution.
+ * Publically inherits from Audio, but using Audio-specific functions is not recommended.
+ */
+class AudioThread: public Audio {
+    public:
+        /**
+         * Loads Audio of a specified length and queues it continuously in another thread.
+         */
+        AudioThread(const std::string& source, double length):
+            Audio(source, length),
+            thread(Audio::thread_queue, this)
+        {}
+        
+        /**
+         * Stops queuing the audio and clear's the audio's queue.
+         */
+        void stop() noexcept {
+            pause();
+            thread.wait();
+            play();
+            dequeue();
+            stopped = true;
+        }
+        
+        /**
+         * Starts queuing the audio again.
+         * If the music is already being queued, the queuing is restarted.
+         */
+        void start() noexcept {
+            if (!stopped) {
+                stop();
+            }
+            
+            thread.new_thread(Audio::thread_queue, this);
+        }
+    
+    private:
+        Thread thread; // The thread in which the Audio is queued.
+        bool stopped = false; // True if the audio has been stopped using this class.
+};
+
+/**
+ * An abstract base class that allows a Messenger to receive messages in another thread.
+ */
+class MessengerThread: public virtual Messenger {
+    public:
+        /**
+         * Waits for one message from the other messenger in another thread.
+         * Resets the message to the given reset string.
+         */
+        void get_message() noexcept {
+            message_string = message_reset;
+            message_thread.new_thread(MessengerPackage::get_message, &messenger_package);
+        }
+        
+        /**
+         * Returns true if the message has been received from the other messenger.
+         * This effectively checks if the message equates with its reset value.
+         */
+        bool received() const noexcept {
+            return message_string != message_reset;
+        }
+        
+        /**
+         * Returns a constant reference to the message received.
+         * Note that the message received will be at the
+         *   reset value if the message was not yet received.
+         */
+        const std::string& message() const noexcept {
+            return message_string;
+        }
+        
+    protected:
+        MessengerThread(
+            const std::string& message_reset = "",
+            int message_length = DEFAULT_READ,
+            int padding = DEFAULT_PADDING,
+            char padder = DEFAULT_PADDER
+        ) noexcept:
+            Messenger(padding, padder),
+            messenger_package(*this, message_string, message_length),
+            message_thread(),
+            message_string(message_reset),
+            message_reset(message_reset)
+        {}
+    
+    private:
+        MessengerPackage messenger_package; // Used for receiving messages in a thread.
+        Thread message_thread; // The thread in which the message is received.
+        std::string message_string; // The string where received messages are stored.
+        std::string message_reset; // The string that indicates that the
+                                   //   message has not been received yet.
+};
+
+/**
+ * A class that allows for the Client to wait for messages in another thread.
+ */
+class ClientThread: public Client, public MessengerThread {
+    public:
+        /**
+         * Constructs a ClientThread object that is fully initialised.
+         */
+        ClientThread(
+			const std::string& address,
+			int port,
+            const std::string& message_reset = "",
+            int message_length = DEFAULT_READ,
+			int padding = DEFAULT_PADDING,
+			char padder = DEFAULT_PADDER
+        ):
+            Client(address, port, padding, padder),
+            MessengerThread(message_reset, message_length, padding, padder)
+        {}
+};
+
+/**
+ * A class that allows for the conditional construction of a Server instance.
+ * Construction is managed in another thread and can be cancelled with a boolean signal.
+ * Also allows for the Server to wait for messages in another thread.
+ */
+class ServerThread: public Server, public MessengerThread {
+    public:
+        /**
+         * Constructs a ServerThread object by partially initialisation.
+         * The Server is attempted to be constructed in another thread.
+         * initialise() should be called periodically in the main
+         *   thread to attempt to finish the initialisation.
+         */
+        ServerThread(
+			int port,
+			bool& cancel,
+            const std::string& message_reset = "",
+            int message_length = DEFAULT_READ,
+			int padding = DEFAULT_PADDING,
+			char padder = DEFAULT_PADDER
+        ) noexcept:
+            Server(),
+            MessengerThread(message_reset, message_length, padding, padder),
+            server_pointer(),
+            server_package(server_pointer, cancel, port),
+            server_thread(ServerPackage::make_server, &server_package)
+        {}
+        
+        /**
+         * If the server was successfully constructed, the
+         *   object is initialised for use and true is returned.
+         */
+        bool initialise() noexcept {
+            if (server_pointer) {
+                server_thread.wait();
+                Server::operator=(std::move(*server_pointer));
+                server_pointer = nullptr;
+                initialised = true;
+            }
+            
+            return initialised;
+        }
+        
+    private:
+        std::unique_ptr<Server> server_pointer; // Used for delayed initialisation.
+        ServerPackage server_package; // Used to construct the server in another thread.
+        Thread server_thread; // The thread in which the construction is performed.
+        bool initialised = false; // True if the object has been initialised.
+};
+
+/**
+ * A class that allows for two messengers to act as a bridge for two other messengers.
+ */
+class BridgeThread: public Bridge {
+    public:
+        BridgeThread(
+			const Messenger& source,
+			const Messenger& destination,
+			const std::string& terminator
+        ) noexcept:
+            Bridge(source, destination, terminator),
+            bridge_thread(Bridge::make_bridge, this)
+        {}
+        
+    private:
+        Thread bridge_thread; // The thread in which the bridge is maintained.
+};
+//}
 //}
 
 /* CHANGELOG:
-     v0.1:
-	   Added the Messenger, Server, Client, Sprite, Display, and Audio classes.
-	   Added the Colour enumeration.
-	   Added the sdl_init(), sdl_quit(), get_time(), and wait() functions.
-	 v0.2:
-	   Added the System, Timer, and Events namespaces.
-	   Renamed sdl_init() to initialised() and moved it to the System namespace.
-	   Renamed sdl_quit() to terminate() and moved it to the System namespace.
-	   Renamed get_time() to time() and moved to to the Timer namespace.
-	   Moved wait() to the Timer namespace.
-	 v0.3:
-	   Added the Point and Rectangle classes.
-	   Changed Sprite::fill() from using SDL_Rect to using Rectangle.
-	 v0.3.2:
-	   Added the System::version() and System::info() methods.
-	 v0.4:
-	   Added the Thread class.
-	 v0.5:
-		Added the Shape, Circle, and Button classes.
-		Made Rectangle a derived class of Shape.
-		Moved Rectangle::click() and Rectangle::unclick() to Shape.
-		Added the Circle overloads of the Sprite::fill() methods.
-		Deprecated the Thread class.
-	 v0.6:
-	   Added the Renderer class.
-	 v0.6.1:
-	   Changed the Sprite and Display classes to no longer be copiable.
-	 v0.6.1.1:
-	   Fixed Renderer::render().
-	 v0.6.2:
-	   Added Sprite::destroy_surface() and Display::destroy_window().
-	   Fixed a memory leak in move assignment and construction of Sprite and Display objects.
-	 v0.6.3:
-	   Added the changelog.
-	 v0.6.4:
-	   Added the System::command() function.
-	 v0.6.4.1:
-	   Changed LETTERS and NUMBERS from macros to constant expressions.
-	 v0.6.4.2:
-	   Added warnings for Events::unclick() and Shape::unclick().
-	 v.0.6.4.3:
-	   Changed SDL_AND_NET_VERSION from const to constexpr.
-	   Changed Sprite::BYTE_ORDER from const to constexpr.
-	   Change Sprite::SURFACE_DEPTH from const to constexpr.
-	 v0.6.5:
-	   Changed the Renderer class to use std::array.
-	   Changed the Renderer class to be templated.
-	   Made Renderer::load_sprites() private.
-	   Added the const version of Display::get_sprite().
-	 v0.6.5.1:
-	   Fixed Renderer::load_numbers() and Renderer::load_letters().
-	 v0.6.6:
-	   Added a Sprite::blit() overload for Rectangle.
-	   Added the const version of Button::get_sprite().
-	 v0.6.7:
-	   Added the Rectangle::set() method that uses a sprite template.
-	 v0.7:
-	   Removed the Thread class.
-	   Made Audio instances non-copiable, but movable.
-	   Added Audio::queuable().
-	 v0.8:
-	   Restored the Thread class with no deprecation status.
-	   Made the Thread class non-copiable, but movable.
-	 v0.8.1:
-	   Added the Rectangle default constructor.
-	 v0.8.2:
-	   Added the Timer::cureent() function.
-	 v0.8.3:
-	   Added the const version of Button::get_rectangle().
-	 v0.8.4:
-	   Added aliases for common scancodes in Events.
-	   Converted System::VIDEO and System::AUDIO to constant expressions.
-	   Converted Events::LEFT_CLICK, Events::MIDDLE_CLICK,
-	     and Events::RIGHT_CLICK to constant expressions.
-	 v0.8.5:
-	   Made System::version() generic.
-	 v1:
-	   Added default arguments to multiple class constructors.
-	   Added default arguments to some functions and methods.
-	   Display's constructors no longer produce fullscreen windows.
-	   Renderer now simply ignores invalid characters.
-	   All functions and methods have been marked as noexcept.
-	 v1.0.0.1:
-	   Fixed a typo in System::info().
-	 v1.0.0.2:
-	   Fixed Point and Rectangle's integer constructors.
-	 v1.0.1:
-	   Moved SDL_AND_NET_VERSION and SDL_AND_NET_VERSION_LENGTH to System.
-	   Renamed SDL_AND_NET_VERSION to VERSION.
-	   Renamed SDL_AND_NET_VERSION_LENGTH to VERSION_LENGTH.
-	   Moved LETTERS and NUMBERS to Renderer.
-	   Added the Point::click() and Point::unclick() methods.
-	   Changed the functionality of Shape::unclick() to be more intuitive.
-	   Added the System::RENDERER constant.
-	 v1.1:
-	   Renamed Renderer to BasicRenderer.
-	   Added the Renderer Abstract Base Class.
-	   BasicRenderer inherits from Renderer.
-	   Added the FullRenderer subclass of Renderer.
-	   Added the Renderer::lined_render() method.
-	   Renderer::render() can now optionally specify the
-	     separation between characters.
-	   Added GREY to Colour.
-	   Updated Sprite::fill() methods to use GREY.
-	 v1.1.1:
-	   Moved Colour into Sprite.
-	   Added the Sprite copy constructor and assignment operator.
-	 v1.1.2:
-	   Added Display constructors for ratios of the display size.
-	 v1.1.3:
-	   The constructor of the Client class can now throw,
-	     if the host address could not be resolved.
-	   System::info() is no longer prepended and terminated with a new line.
-	   Add the System::NONE and System::NET constant expressions.
-	   Sprite::operator=() now correctly returns the sprite.
-	 v1.1.4:
-	   Added Audio::dequeue().
-	 v1.1.5:
-	   Added Sprite::to_rgb().
-	   Changed the relevant Sprite::fill() methods to use Sprite::to_rgb().
-	 v1.1.5.1:
-	   Added #pragma once
-	 v1.1.6:
-	   Added Audio::thread_queue().
-	 v1.2:
-	   System::initialise() now only takes a single argument of type Uint32.
-	   System::NET should be bitwise OR'd with
-	     other constants to intialise SDL Net.
-	   Sytem::NONE, System::VIDEO, System::AUDIO,
-	     and System::NET are now of type Uint32.
-	   Deleted the Server class' copy constructor and assignment operator.
-	   Deleted the Client class' copy constructor and assignment operator.
-	   Added the Server class' move constructor and assignment operator.
-	   Added the Client class' move constructor and assignment operator.
-	 v1.3:
-	   Added some new constructors for Rectangle.
-	   Added Rectangle::shift().
-	   Added Rectangle::widen().
-	   Generalised Circle Sprite::fill() methods to use Shape instances.
-	   Renamed Sprite::BYTE_ORDER to Sprite::SPRITE_BYTE_ORDER,
-	     in order to stop a name clash for some compilers.
-	 v1.3.1:
-	   Added operator!=() to all classes with operator==().
-	   Rearranged the ordering of Sprite::Colour.
+     v4.0.1:
+       Added the RESIZE Event::Type.
+       Added the Display::resize() method.
+       Added SDL_WINDOW_RESIZABLE to Display::DEFAULT_FLAGS.
+     v4:
+       Added the Event Class.
+       Added the Mutex Class.
+       Added the Semaphore Class.
+       Added the ConditionVariable Class.
+       Changed the value of Messenger::DEFAULT_READ from 1000 to 100.
+       Slight modifications to documentation.
+     v3.0.2:
+       Added a Sprite source-loaded, ratio constructor.
+       Random::get_real() and Random::get_double() now take doubles instead of ints.
+       y_separation and max_width have swapped argument positions in Renderer::lined_render().
+       System::VERSION is now defined to be of size System::VERSION_LENGTH.
+       Exceptions from a missing source now display the source that is missing.
+       SDL_WINDOW_RESIZABLE was removed from Display::DEFAULT_FLAGS.
+       Improved documentation of functions overloads.
+     v3.0.1.1:
+       Messenger::send() no longer uses a loop to pad the message.
+       Messenger::read() uses a vector instead of dynamically allocating a buffer.
+       Improved comments in Messenger::send() and Messenger::read().
+     v3.0.1:
+       Sprite's constructors, that load a BMP from the given source,
+         now throw an exception if the Surface could not be loaded.
+       ServerThread::initialise() now resets server_thread and server_pointer.
+     v3:
+       Added the AudioThread class.
+       Added the MessengerThread abstract base class.
+       Added the ClientThread class.
+       Added the ServerThread class.
+       Added the BridgeThread class.
+       ClientPackage was renamed to Bridge.
+       Messenger::read() and Messenger::send() now throw an exception if the socket is null.
+       Server and Client now virtually inherit from Messenger.
+       Server and Client now have default constructors.
+       Audio::load() and the Audio constructors now throw
+         an exception if the audio file could not be found.
+       Functions in the Random namespace now throw an exception if min > max.
+       Display now has a set of default flags for window creation:
+         SDL_WINDOW_SHOWN
+         SDL_WINDOW_RESIZABLE
+       Reversed the changelog's ordering.
+     v2.1.0.1:
+	   Random::get_int() now converts (1 + max - min) to an unsigned integer.
+	 v2.1:
+	   Added the Random namespace.
+	   System::command now returns the command's exit code.
 	 v2:
 	   Added the MessengerPackage class.
 	   Added the ServerPackage class.
@@ -3044,4 +3734,148 @@ class Thread {
 	     Messenger::read() from reading 2 two messages at once).
 	   Display is now a subclass of Sprite, but all methods are still operational.
 	   Renderer::render() and Renderer::lined_render() now have ratio versions.
+	 v1.3.1:
+	   Added operator!=() to all classes with operator==().
+	   Rearranged the ordering of Sprite::Colour.
+	 v1.3:
+	   Added some new constructors for Rectangle.
+	   Added Rectangle::shift().
+	   Added Rectangle::widen().
+	   Generalised Circle Sprite::fill() methods to use Shape instances.
+	   Renamed Sprite::BYTE_ORDER to Sprite::SPRITE_BYTE_ORDER,
+	     in order to stop a name clash for some compilers.
+	 v1.2:
+	   System::initialise() now only takes a single argument of type Uint32.
+	   System::NET should be bitwise OR'd with
+	     other constants to intialise SDL Net.
+	   Sytem::NONE, System::VIDEO, System::AUDIO,
+	     and System::NET are now of type Uint32.
+	   Deleted the Server class' copy constructor and assignment operator.
+	   Deleted the Client class' copy constructor and assignment operator.
+	   Added the Server class' move constructor and assignment operator.
+	   Added the Client class' move constructor and assignment operator.
+	 v1.1.6:
+	   Added Audio::thread_queue().
+	 v1.1.5.1:
+	   Added #pragma once.
+	 v1.1.5:
+	   Added Sprite::to_rgb().
+	   Changed the relevant Sprite::fill() methods to use Sprite::to_rgb().
+	 v1.1.4:
+	   Added Audio::dequeue().
+	 v1.1.3:
+	   The constructor of the Client class can now throw,
+	     if the host address could not be resolved.
+	   System::info() is no longer prepended and terminated with a new line.
+	   Add the System::NONE and System::NET constant expressions.
+	   Sprite::operator=() now correctly returns the sprite.
+	 v1.1.2:
+	   Added Display constructors for ratios of the display size.
+	 v1.1.1:
+	   Moved Colour into Sprite.
+	   Added the Sprite copy constructor and assignment operator.
+	 v1.1:
+	   Renamed Renderer to BasicRenderer.
+	   Added the Renderer Abstract Base Class.
+	   BasicRenderer inherits from Renderer.
+	   Added the FullRenderer subclass of Renderer.
+	   Added the Renderer::lined_render() method.
+	   Renderer::render() can now optionally specify the
+	     separation between characters.
+	   Added GREY to Colour.
+	   Updated Sprite::fill() methods to use GREY.
+	 v1.0.1:
+	   Moved SDL_AND_NET_VERSION and SDL_AND_NET_VERSION_LENGTH to System.
+	   Renamed SDL_AND_NET_VERSION to VERSION.
+	   Renamed SDL_AND_NET_VERSION_LENGTH to VERSION_LENGTH.
+	   Moved LETTERS and NUMBERS to Renderer.
+	   Added the Point::click() and Point::unclick() methods.
+	   Changed the functionality of Shape::unclick() to be more intuitive.
+	   Added the System::RENDERER constant.
+	 v1.0.0.2:
+	   Fixed Point and Rectangle's integer constructors.
+	 v1.0.0.1:
+	   Fixed a typo in System::info().
+	 v1:
+	   Added default arguments to multiple class constructors.
+	   Added default arguments to some functions and methods.
+	   Display's constructors no longer produce fullscreen windows.
+	   Renderer now simply ignores invalid characters.
+	   All functions and methods have been marked as noexcept.
+	 v0.8.5:
+	   Made System::version() generic.
+	 v0.8.4:
+	   Added aliases for common scancodes in Events.
+	   Converted System::VIDEO and System::AUDIO to constant expressions.
+	   Converted Events::LEFT_CLICK, Events::MIDDLE_CLICK,
+	     and Events::RIGHT_CLICK to constant expressions.
+	 v0.8.3:
+	   Added the const version of Button::get_rectangle().
+	 v0.8.2:
+	   Added the Timer::cureent() function.
+	 v0.8.1:
+	   Added the Rectangle default constructor.
+	 v0.8:
+	   Restored the Thread class with no deprecation status.
+	   Made the Thread class non-copiable, but movable.
+	 v0.7:
+	   Removed the Thread class.
+	   Made Audio instances non-copiable, but movable.
+	   Added Audio::queuable().
+	 v0.6.7:
+	   Added the Rectangle::set() method that uses a sprite template.
+	 v0.6.6:
+	   Added a Sprite::blit() overload for Rectangle.
+	   Added the const version of Button::get_sprite().
+	 v0.6.5.1:
+	   Fixed Renderer::load_numbers() and Renderer::load_letters().
+	 v0.6.5:
+	   Changed the Renderer class to use std::array.
+	   Changed the Renderer class to be templated.
+	   Made Renderer::load_sprites() private.
+	   Added the const version of Display::get_sprite().
+	 v.0.6.4.3:
+	   Changed SDL_AND_NET_VERSION from const to constexpr.
+	   Changed Sprite::BYTE_ORDER from const to constexpr.
+	   Change Sprite::SURFACE_DEPTH from const to constexpr.
+	 v0.6.4.2:
+	   Added warnings for Events::unclick() and Shape::unclick().
+	 v0.6.4.1:
+	   Changed LETTERS and NUMBERS from macros to constant expressions.
+	 v0.6.4:
+	   Added the System::command() function.
+	 v0.6.3:
+	   Added the changelog.
+	 v0.6.2:
+	   Added Sprite::destroy_surface() and Display::destroy_window().
+	   Fixed a memory leak in move assignment and construction of Sprite and Display objects.
+	 v0.6.1.1:
+	   Fixed Renderer::render().
+	 v0.6.1:
+	   Changed the Sprite and Display classes to no longer be copiable.
+	 v0.6:
+	   Added the Renderer class.
+	 v0.5:
+		Added the Shape, Circle, and Button classes.
+		Made Rectangle a derived class of Shape.
+		Moved Rectangle::click() and Rectangle::unclick() to Shape.
+		Added the Circle overloads of the Sprite::fill() methods.
+		Deprecated the Thread class.
+	 v0.4:
+	   Added the Thread class.
+	 v0.3.2:
+	   Added the System::version() and System::info() methods.
+	 v0.3:
+	   Added the Point and Rectangle classes.
+	   Changed Sprite::fill() from using SDL_Rect to using Rectangle.
+	 v0.2:
+	   Added the System, Timer, and Events namespaces.
+	   Renamed sdl_init() to initialised() and moved it to the System namespace.
+	   Renamed sdl_quit() to terminate() and moved it to the System namespace.
+	   Renamed get_time() to time() and moved to to the Timer namespace.
+	   Moved wait() to the Timer namespace.
+     v0.1:
+	   Added the Messenger, Server, Client, Sprite, Display, and Audio classes.
+	   Added the Colour enumeration.
+	   Added the sdl_init(), sdl_quit(), get_time(), and wait() functions.
  */
