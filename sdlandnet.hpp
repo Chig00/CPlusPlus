@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 1};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 2};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -2388,7 +2388,7 @@ class Display: public Sprite {
          */
         void resize() noexcept {
             destroy_window();
-            create_window(title, width, height, flags);
+            create_window(title, width_, height_, flags);
         }
         
 	private:
@@ -2405,8 +2405,8 @@ class Display: public Sprite {
 			Uint32 flags
 		) noexcept {
             this->title = title;
-            this->width = width;
-            this->height = height;
+            this->width_ = width;
+            this->height_ = height;
             this->flags = flags;
 			window = SDL_CreateWindow(
 				title.c_str(),
@@ -2436,8 +2436,8 @@ class Display: public Sprite {
 		SDL_Window* window;            // The window for the display.
 		bool window_allocated = false; // True if this class allocated memory for the window.
         std::string title;
-        int width;
-        int height;
+        int width_;
+        int height_;
         Uint32 flags;
 };
 
@@ -3759,6 +3759,9 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.1.2:
+       Renamed Display::width to Display::width_ to avoid conflicts with Sprite::width().
+       Renamed Display::height to Display::height_ to avoid conflicts with Sprite::height().
      v4.0.1.1:
        Improvements to documentation and sectioning.
      v4.0.1:
