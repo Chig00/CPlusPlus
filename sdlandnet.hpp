@@ -20,9 +20,11 @@
  * A namespace for initialisation and shutdown functions.
  */
 namespace System {
+    // Constants
+    //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 0};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 1};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -45,7 +47,10 @@ namespace System {
 		| SDL_INIT_EVENTS
 		| SDL_INIT_NOPARACHUTE
 	);
-	
+	//}
+    
+    // Info
+    //{
     /**
 	 * Returns the version in string form.
 	 */
@@ -78,7 +83,10 @@ namespace System {
 		
 		return stream.str();
 	}
-	
+	//}
+    
+    // Control
+    //{
 	/**
 	 * Initialises SDL with the given flags.
 	 * Optionally intialises SDL_net.
@@ -98,13 +106,14 @@ namespace System {
 		SDLNet_Quit();
 		SDL_Quit();
 	}
-
+    
 	/**
 	 * Sends the given command to the command line.
 	 */
 	int command(const std::string& command_string) noexcept {
 		return system(command_string.c_str());
 	}
+    //}
 }
 
 /**
@@ -161,7 +170,7 @@ namespace Timer {
  */
 namespace Random {
     #define RANDOM_ASSERTION (min > max)
-    constexpr const char* RANDOM_ERROR = "min > max is undefined.";
+    constexpr const char* RANDOM_ERROR = "min can't be greater than max.";
     
 	/**
 	 * A function that returns a random integer in the interval [min, max].
@@ -220,6 +229,8 @@ namespace Random {
  */
 class Point {
 	public:
+        // Constructors and Operator Overloads
+        //{
 		/**
 		 * Constructs a new Point instance at the given position.
 		 */
@@ -274,7 +285,10 @@ class Point {
 			
 			return *this;
 		}
-		
+		//}
+        
+        // Assignment
+        //{
 		/**
 		 * Sets the point to be at the given position.
 		 */
@@ -296,7 +310,10 @@ class Point {
 		void set_y(int y = 0) noexcept {
 			point.y = y;
 		}
-		
+		//}
+        
+        // Retrieval
+        //{
 		/**
 		 * Returns a pointer to the internal SDL_Point.
 		 */
@@ -317,7 +334,10 @@ class Point {
 		int get_y() const noexcept {
 			return point.y;
 		}
-		
+		//}
+        
+        // Calculations
+        //{
 		/**
 		 * Returns the distance between the given point and this one.
 		 */
@@ -335,7 +355,10 @@ class Point {
 				+ pow(point.y - y, 2)
 			);
 		}
-	
+        //}
+        
+        // Event Handling
+        //{
 		/**
 		 * Returns true if the mouse button is being clicked.
 		 * Sets the position of the point to match the mouse's coordinates.
@@ -348,7 +371,8 @@ class Point {
 		 * Sets the position of the point to match the mouse's coordinates.
 		 */
 		bool unclick(int) noexcept;
-	
+        //}
+        
 	private:	
 		SDL_Point point; // The internal point
 };
@@ -359,6 +383,8 @@ class Point {
  * The Event class is the preferred method for event handling.
  */
 namespace Events {
+    // Constants
+    //{
 	// For use with mouse click functions.
 	constexpr int LEFT_CLICK = SDL_BUTTON(SDL_BUTTON_LEFT);
 	constexpr int MIDDLE_CLICK = SDL_BUTTON(SDL_BUTTON_MIDDLE);
@@ -423,7 +449,8 @@ namespace Events {
 	constexpr int COMMA = SDL_SCANCODE_COMMA;
 	constexpr int SEMICOLON = SDL_SCANCODE_SEMICOLON;
 	constexpr int SLASH = SDL_SCANCODE_SLASH;
-	
+	//}
+    
 	/**
 	 * Updates the events.
 	 * Should be called for each event check loop.
@@ -432,6 +459,8 @@ namespace Events {
 		SDL_PumpEvents();
 	}
 	
+    // Keyboard
+    //{
 	/**
 	 * Returns true if the given key is being pressed.
 	 */
@@ -462,7 +491,10 @@ namespace Events {
 		// The key press status is returned.
 		return pressed;
 	}
-
+    //}
+    
+    // Mouse
+    //{
 	/**
 	 * Returns true if the given mouse button is being clicked.
 	 */
@@ -569,8 +601,11 @@ namespace Events {
 		
 		return state;
 	}
+    //}
 }
 
+// Point Event Handling
+//{
 /**
  * Returns true if the mouse button is being clicked.
  * Sets the position of the point to match the mouse's coordinates.
@@ -587,6 +622,7 @@ bool Point::click(int button = Events::LEFT_CLICK) noexcept {
 bool Point::unclick(int button = Events::LEFT_CLICK) noexcept {
 	return Events::unclick(button, *this);
 }
+//}
 
 /**
  * A class that defines an event.
@@ -618,6 +654,8 @@ class Event {
          */
         Event() noexcept {}
         
+        // Polling
+        //{
         /**
          * Sets the event to the oldest event in the event queue.
          * The event is removed.
@@ -659,7 +697,10 @@ class Event {
             
             return pending;
         }
+        //}
         
+        // Queries
+        //{
         /**
          * Returns the type of event.
          */
@@ -703,7 +744,8 @@ class Event {
         Point click_position() const noexcept {
             return Point(event.button.x, event.button.y);
         }
-    
+        //}
+        
     private:
         /**
          * Determines the event's type.
@@ -1032,6 +1074,7 @@ class Client: public virtual Messenger {
 
 /**
  * A class that allows one to receive a message in another thread.
+ * MessengerThread contains an instance of this class and its subclasses should be used instead.
  */
 class MessengerPackage {
 	public:
@@ -1102,8 +1145,8 @@ class MessengerPackage {
 };
 
 /**
- * A class that should be used to conditionally
- *   instantiate a server in another thread.
+ * A class that can be used to conditionally instantiate a server in another thread.
+ * ServerThread contains an instance of this class and should be used instead.
  */
 class ServerPackage {
 	public:
@@ -1182,6 +1225,7 @@ class ServerPackage {
  * This class can allow two Client instances to communicate through
  *   two Server instances, which can be useful if the two parties
  *   are unable to perform port forwarding (but a third party is able to).
+ * BridgeThread contains an instance of this class and should be used instead.
  */
 class Bridge {
 	public:
@@ -1303,6 +1347,8 @@ class Shape {
  */
 class Rectangle: public Shape {
 	public:
+        // Constructors
+        //{
 		/**
 		 * Constructs a new Rectangle with
 		 *   the given position and dimensions.
@@ -1344,6 +1390,19 @@ class Rectangle: public Shape {
 		Rectangle(SDL_Rect r) noexcept {
 			rectangle = r;
 		}
+		//}
+        
+        // Operator Overloads
+        //{
+		/**
+		 * Sets this object to cover the exact same area
+		 *   as the given SDL_Rect.
+		 */
+		Rectangle& operator=(SDL_Rect r) noexcept {
+			rectangle = r;
+			
+			return *this;
+		}
 		
 		/**
 		 * Returns true if the given rectangle covers
@@ -1376,17 +1435,56 @@ class Rectangle: public Shape {
 		bool operator!=(SDL_Rect r) const noexcept {
 			return !operator==(r);
 		}
-		
-		/**
-		 * Sets this object to cover the exact same area
-		 *   as the given SDL_Rect.
+		//}
+        
+        /**
+		 * Returns a pointer to the internal SDL_Rect.
 		 */
-		Rectangle& operator=(SDL_Rect r) noexcept {
-			rectangle = r;
-			
-			return *this;
+		const SDL_Rect* get() const noexcept {
+			return &rectangle;
 		}
 		
+		// Dimension Retrieval
+        //{
+		/**
+		 * Returns the left edge's position.
+		 */
+		int get_x() const noexcept {
+			return rectangle.x;
+		}
+		
+		/**
+		 * Returns the top edge's position.
+		 */
+		int get_y() const noexcept {
+			return rectangle.y;
+		}
+		
+		/**
+		 * Returns the rectangle's width.
+		 */
+		int get_width() const noexcept {
+			return rectangle.w;
+		}
+		
+		/**
+		 * Returns the rectangle's height.
+		 */
+		int get_height() const noexcept {
+			return rectangle.h;
+		}
+		
+		/**
+		 * Constructs and returns a Point at the Rectangle's
+		 * top-left vertex.
+		 */
+		Point get_point() const noexcept {
+			return Point(rectangle.x, rectangle.y);
+		}
+		//}
+        
+        // Dimension Assignment
+        //{
 		/**
 		 * Sets the position and dimensions of this Rectangle.
 		 */
@@ -1436,66 +1534,10 @@ class Rectangle: public Shape {
 		void set_height(int height = 0) noexcept {
 			rectangle.h = height;
 		}
-		
-		/**
-		 * Returns a pointer to the internal SDL_Rect.
-		 */
-		const SDL_Rect* get() const noexcept {
-			return &rectangle;
-		}
-		
-		/**
-		 * Returns the left edge's position.
-		 */
-		int get_x() const noexcept {
-			return rectangle.x;
-		}
-		
-		/**
-		 * Returns the top edge's position.
-		 */
-		int get_y() const noexcept {
-			return rectangle.y;
-		}
-		
-		/**
-		 * Returns the rectangle's width.
-		 */
-		int get_width() const noexcept {
-			return rectangle.w;
-		}
-		
-		/**
-		 * Returns the rectangle's height.
-		 */
-		int get_height() const noexcept {
-			return rectangle.h;
-		}
-		
-		/**
-		 * Constructs and returns a Point at the Rectangle's
-		 * top-left vertex.
-		 */
-		Point get_point() const noexcept {
-			return Point(rectangle.x, rectangle.y);
-		}
-		
-		/**
-		 * Returns true if the given point is inside
-		 *   of this rectangle.
-		 */
-		bool contains(const Point& point) const noexcept {
-			return SDL_PointInRect(point.get(), &rectangle);
-		}
-		
-		/**
-		 * Returns true if the given rectangle
-		 *   intersects with this one.
-		 */
-		bool intersects(const Rectangle& r) const noexcept {
-			return SDL_HasIntersection(&r.rectangle, &rectangle);
-		}
-		
+		//}
+        
+        // Dimension Modification
+        //{
 		/**
 		 * Moves the rectangle according to the given arguments.
 		 * Positive values of x move the rectangle to the right.
@@ -1517,7 +1559,27 @@ class Rectangle: public Shape {
 			rectangle.w += width;
 			rectangle.h += height;
 		}
+		//}
+        
+        // Geometry Tests
+        //{
+		/**
+		 * Returns true if the given point is inside
+		 *   of this rectangle.
+		 */
+		bool contains(const Point& point) const noexcept {
+			return SDL_PointInRect(point.get(), &rectangle);
+		}
 		
+		/**
+		 * Returns true if the given rectangle
+		 *   intersects with this one.
+		 */
+		bool intersects(const Rectangle& r) const noexcept {
+			return SDL_HasIntersection(&r.rectangle, &rectangle);
+		}
+		//}
+        
 	private:
 		SDL_Rect rectangle; // The internal rectangle
 };
@@ -1527,6 +1589,8 @@ class Rectangle: public Shape {
  */
 class Circle: public Shape {
 	public:
+        // Constructors and Operator Overloads
+        //{
 		/**
 		 * Constructs a circle at the given coordinates
 		 *   and with the given radius.
@@ -1558,7 +1622,10 @@ class Circle: public Shape {
 		bool operator!=(const Circle& c) const noexcept {
 			return !operator==(c);
 		}
-		
+		//}
+        
+        // Dimension Assignment
+        //{
 		/**
 		 * Sets the circle's position and radius.
 		 */
@@ -1610,7 +1677,10 @@ class Circle: public Shape {
 		void set_radius(int r = 0) noexcept {
 			radius = r;
 		}
-		
+		//}
+        
+        // Dimension Retrieval
+        //{
 		/**
 		 * Returns a reference to the circle's Point instance.
 		 */
@@ -1638,7 +1708,8 @@ class Circle: public Shape {
 		int get_radius() const noexcept {
 			return radius;
 		}
-		
+        //}
+        
 		/**
 		 * Returns true if the given Point is contained within the circle.
 		 */
@@ -1679,6 +1750,8 @@ class Sprite {
 			MAGENTA  // ff00ff
 		};
 		
+        // Constructors
+        //{
 		/**
 		 * Constructs a new Sprite object using the given surface.
 		 */
@@ -1791,7 +1864,8 @@ class Sprite {
 		Sprite(Sprite&& sprite) noexcept {
 			operator=(std::move(sprite));
 		}
-		
+		//}
+        
 		/**
 		 * Frees the mmeory dynamically allocated to the surface
 		 *   if it was allocated in this class.
@@ -1800,6 +1874,8 @@ class Sprite {
 			destroy_surface();
 		}
 		
+        // Assignment
+        //{
 		/**
 		 * Initialises the sprite with the given surface.
 		 */
@@ -1831,7 +1907,10 @@ class Sprite {
 			
 			return *this;
 		}
-		
+		//}
+        
+        // Size Queries
+        //{
 		/**
 		 * Returns the width of the sprite.
 		 */
@@ -1859,7 +1938,10 @@ class Sprite {
 		int get_height() const noexcept {
 			return surface->h;
 		}
-		
+		//}
+        
+        // Colour Fill
+        //{
 		/**
 		 * Fills in the sprite with the given RGB colour.
 		 */
@@ -1943,7 +2025,10 @@ class Sprite {
 			std::array<int, 3> rgb = to_rgb(colour);
 			fill(shape, rgb[0], rgb[1], rgb[2]);
 		}
-		
+		//}
+        
+        // Blitting
+        //{
 		/**
 		 * Blits the given sprite to this one.
 		 * The given sprite is scaled to match the size of this one.
@@ -2000,6 +2085,7 @@ class Sprite {
 				static_cast<int>(surface->h * y - sprite.surface->h / 2)
 			);
 		}
+        //}
 		
 		/**
 		 * Returns the colour in RGB form.
@@ -2122,6 +2208,8 @@ class Sprite {
  */
 class Display: public Sprite {
 	public:
+        // Constructors
+        //{
 		/**
 		 * Makes a window with the given dimensions and no title.
 		 * Passing 0 as both the width and height makes
@@ -2221,7 +2309,8 @@ class Display: public Sprite {
 		{
 			operator=(std::move(display));
 		}
-		
+		//}
+        
 		/**
 		 * Destroys the window associated with the object if
 		 *   the memory for it was allocated by this object.
@@ -2231,6 +2320,8 @@ class Display: public Sprite {
 			destroy_window();
 		}
 		
+        // Assignment
+        //{
 		/**
 		 * Display objects should not be copied.
 		 * Copying can cause the window to be destroyed prematurely or twice.
@@ -2263,7 +2354,8 @@ class Display: public Sprite {
 			
 			return *this;
 		}
-		
+		//}
+        
 		/**
 		 * Updates the window's surface.
 		 */
@@ -2352,9 +2444,12 @@ class Display: public Sprite {
 /**
  * A class that manages the audio system.
  * Each instance of this class corresponds to an audio segment and device.
+ * AudioThread contains an instance of this class and should be used instead for automatic queuing.
  */
 class Audio {
 	public:
+        // Constructors
+        //{
 		/**
 		 * Loads an audio clip from the given source.
 		 * Can requeue whenever one wishes to do so.
@@ -2387,7 +2482,8 @@ class Audio {
 		Audio(Audio&& audio) noexcept {
 			operator=(std::move(audio));
 		}
-		
+		//}
+        
 		/**
 		 * Frees all memory dynamically allocated to this object.
 		 */
@@ -2395,6 +2491,8 @@ class Audio {
 			free_audio();
 		}
 		
+        // Assignment
+        //{
 		/**
 		 * Audio instances are not safe to be copied.
 		 */
@@ -2422,7 +2520,10 @@ class Audio {
 			
 			return *this;
 		}
-		
+		//}
+        
+        // Audio Control
+        //{
 		/**
 		 * Sets the audio clip to play.
 		 * Manages the queue timer to account for the time paused.
@@ -2448,23 +2549,6 @@ class Audio {
 		}
 		
 		/**
-		 * Queues the audio to play after the current audio clip stops playing.
-		 */
-		void queue() noexcept {
-			if (queuable()) {
-				SDL_QueueAudio(audio_device, audio_buffer, audio_length);
-				last_queue = Timer::time();
-			}
-		}
-		
-		/**
-		 * Returns true if the audio is paused.
-		 */
-		bool pause_check() const noexcept {
-			return paused;
-		}
-		
-		/**
 		 * Plays if the audio is paused.
 		 * Pauses if the audio is playing.
 		 */
@@ -2479,10 +2563,23 @@ class Audio {
 		}
 		
 		/**
-		 * Returns true if the queue() method can queue audio.
+		 * Returns true if the audio is paused.
 		 */
-		bool queuable() const noexcept {
-			return !last_queue || !length || Timer::time() > last_queue + length;
+		bool pause_check() const noexcept {
+			return paused;
+		}
+		//}
+        
+        // Audio Queue
+        //{
+		/**
+		 * Queues the audio to play after the current audio clip stops playing.
+		 */
+		void queue() noexcept {
+			if (queuable()) {
+				SDL_QueueAudio(audio_device, audio_buffer, audio_length);
+				last_queue = Timer::time();
+			}
 		}
 		
 		/**
@@ -2492,6 +2589,13 @@ class Audio {
 		void dequeue() noexcept {
 			SDL_ClearQueuedAudio(audio_device);
 			last_queue = 0;
+		}
+		
+		/**
+		 * Returns true if the queue() method can queue audio.
+		 */
+		bool queuable() const noexcept {
+			return !last_queue || !length || Timer::time() > last_queue + length;
 		}
 		
 		/**
@@ -2506,7 +2610,8 @@ class Audio {
 			
 			return 0;
 		}
-		
+		//}
+        
 	private:
 		/**
 		 * Loads the song at the given source.
@@ -2552,6 +2657,8 @@ class Audio {
  */
 class Button {
 	public:
+        // Constructors
+        //{
 		/**
 		 * Constructs a new Button object from given copied Sprite.
 		 * The Rectangle is constructed at the given position
@@ -2615,7 +2722,8 @@ class Button {
 				sprite.get_height()
 			)
 		{}
-		
+		//}
+        
 		/**
 		 * Blits the Button's sprite to the given sprite using
 		 *   the Button's Rectangle.
@@ -3651,6 +3759,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.1.1:
+       Improvements to documentation and sectioning.
      v4.0.1:
        Added the RESIZE Event::Type.
        Added the Display::resize() method.
