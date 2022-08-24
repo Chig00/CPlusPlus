@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 2};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 3};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -3587,6 +3587,13 @@ class AudioThread: public Audio {
         {}
         
         /**
+         * Explicit destructor to prevent an eternal Thread.wait().
+         */
+        ~AudioThread() noexcept {
+            stop();
+        }
+        
+        /**
          * Stops queuing the audio and clear's the audio's queue.
          */
         void stop() noexcept {
@@ -3759,6 +3766,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.1.3:
+       Added a destructor to AudioThread.
      v4.0.1.2:
        Renamed Display::width to Display::width_ to avoid conflicts with Sprite::width().
        Renamed Display::height to Display::height_ to avoid conflicts with Sprite::height().
