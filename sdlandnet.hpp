@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 1, 3};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 2, 0};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -3200,8 +3200,7 @@ class FullRenderer: public Renderer {
 //{
 /**
  * Manages a separate thread of execution.
- * This is for use with 32-bit libraries,
- *   as they do not support std::thread.
+ * This is for use with 32-bit libraries, as they do not support std::thread.
  */
 class Thread {
 	public:
@@ -3228,9 +3227,8 @@ class Thread {
 		
 		/**
 		 * Instances of this class are safe to move.
-		 * Moving is not recommended, as the thread must
-		 *   for its function to return before taking the
-		 *   value of the given thread.
+		 * Moving should be performed with care, as this thread must wait for
+		 *   its function to return before taking the value of the given thread.
 		 */
 		Thread(Thread&& t) noexcept {
 			operator=(std::move(t));
@@ -3319,7 +3317,35 @@ class Mutex {
          * The mutex should have been unlocked before destruction.
          */
         ~Mutex() noexcept {
-            SDL_DestroyMutex(mutex);
+            destroy();
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        Mutex(const Mutex&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        Mutex(Mutex&& m) noexcept {
+            operator=(std::move(m));
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        Mutex& operator=(const Mutex&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        Mutex& operator=(Mutex&& m) noexcept {
+            destroy();
+            mutex = m.mutex;
+            m.mutex = nullptr;
+            
+            return *this;
         }
         
         /**
@@ -3387,6 +3413,16 @@ class Mutex {
         }
         
     private:
+        /**
+         * Destroys the mutex.
+         * The mutex should have been unlocked before destruction.
+         */
+        void destroy() noexcept {
+            if (mutex) {
+                SDL_DestroyMutex(mutex);
+            }
+        }
+        
         SDL_mutex* mutex; // The pointer to the raw mutex.
         int locks = 0; // The number of recursive locks made.
 };
@@ -3412,6 +3448,34 @@ class Semaphore {
          */
         ~Semaphore() noexcept {
             SDL_DestroySemaphore(semaphore);
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        Semaphore(const Semaphore&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        Semaphore(Semaphore&& s) noexcept {
+            operator=(std::move(s));
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        Semaphore& operator=(const Semaphore&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        Semaphore& operator=(Semaphore&& s) noexcept {
+            destroy();
+            semaphore = s.semaphore;
+            s.semaphore = nullptr;
+            
+            return *this;
         }
         
         /**
@@ -3480,12 +3544,23 @@ class Semaphore {
         
         /**
          * Returns the current value of the semaphore.
+         * Non-constant, as SDL_SemValue takes a non-constant pointer.
          */
         Uint32 get_value() noexcept {
             return SDL_SemValue(semaphore);
         }
         
     private:
+        /**
+         * Destroys the semaphore.
+         * The semaphore should not be waited on upon destruction.
+         */
+        void destroy() noexcept {
+            if (semaphore) {
+                SDL_DestroyMutex(mutex);
+            }
+        }
+        
         SDL_sem* semaphore; // The pointer to the raw semaphore.
 };
 
@@ -3505,10 +3580,38 @@ class ConditionVariable {
         }
         
         /**
-         * Destroys the ocndition variable.
+         * Destroys the condition variable.
          */
         ~ConditionVariable() noexcept {
-            SDL_DestroyCond(condition_variable);
+            destroy();
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        ConditionVariable(const ConditionVariable&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        ConditionVariable(ConditionVariable&& cv) noexcept {
+            operator=(std::move(cv));
+        }
+        
+        /**
+         * Instances of this class are not safe to copy.
+         */
+        ConditionVariable& operator=(const ConditionVariable&) = delete;
+        
+        /**
+         * Instances of this class are safe to move.
+         */
+        ConditionVariable& operator=(ConditionVariable&& cv) noexcept {
+            destroy();
+            condition_variable = cv.condition_variable;
+            cv.condition_variable = nullptr;
+            
+            return *this;
         }
         
         /**
@@ -3566,6 +3669,15 @@ class ConditionVariable {
         }
         
     private:
+        /**
+         * Destroys the condition variable.
+         */
+        void destroy() noexcept {
+            if (condition_variable) {
+                SDL_DestroyCond(condition_variable);
+            }
+        }
+        
         SDL_cond* condition_variable; // The pointer to the raw condition variable.
 };
 //}
@@ -3766,6 +3878,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.2:
+       Mutex, Semaphore, and ConditionVariable can now only be moved, not copied.
      v4.0.1.3:
        Added a destructor to AudioThread.
      v4.0.1.2:
