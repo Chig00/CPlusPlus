@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 2, 0};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 2, 1};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -3557,7 +3557,7 @@ class Semaphore {
          */
         void destroy() noexcept {
             if (semaphore) {
-                SDL_DestroyMutex(mutex);
+                SDL_DestroySemaphore(semaphore);
             }
         }
         
@@ -3878,6 +3878,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.2.1:
+       Fixed Semaphore::destroy().
      v4.0.2:
        Mutex, Semaphore, and ConditionVariable can now only be moved, not copied.
      v4.0.1.3:
