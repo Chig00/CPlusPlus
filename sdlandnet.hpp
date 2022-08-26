@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 2, 1};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 3, 0};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -743,6 +743,20 @@ class Event {
          */
         Point click_position() const noexcept {
             return Point(event.button.x, event.button.y);
+        }
+        
+        /**
+         * Returns the window's new width.
+         */
+        int window_width() const noexcept {
+            return event.window.data1;
+        }
+        
+        /**
+         * Returns the window's new height.
+         */
+        int window_height() const noexcept {
+            return event.window.data2;
         }
         //}
         
@@ -2384,11 +2398,11 @@ class Display: public Sprite {
 		}
 		
         /**
-         * Reallocates the window (usually after a resize).
+         * Resizes the window.
          */
-        void resize() noexcept {
+        void resize(int w, int h) noexcept {
             destroy_window();
-            create_window(title, width_, height_, flags);
+            create_window(title, w, h, flags);
         }
         
 	private:
@@ -2405,8 +2419,6 @@ class Display: public Sprite {
 			Uint32 flags
 		) noexcept {
             this->title = title;
-            this->width_ = width;
-            this->height_ = height;
             this->flags = flags;
 			window = SDL_CreateWindow(
 				title.c_str(),
@@ -2436,8 +2448,6 @@ class Display: public Sprite {
 		SDL_Window* window;            // The window for the display.
 		bool window_allocated = false; // True if this class allocated memory for the window.
         std::string title;
-        int width_;
-        int height_;
         Uint32 flags;
 };
 
@@ -3878,6 +3888,9 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.3:
+       Added Event::window_width() and Event::window_height().
+       Display::resize() now takes two arguments (use the returned values of Event::window_*()).
      v4.0.2.1:
        Fixed Semaphore::destroy().
      v4.0.2:
