@@ -24,7 +24,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 3, 0};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 3, 1};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -1581,7 +1581,7 @@ class Rectangle: public Shape {
 		 * Returns true if the given point is inside
 		 *   of this rectangle.
 		 */
-		bool contains(const Point& point) const noexcept {
+		bool contains(const Point& point) const noexcept override {
 			return SDL_PointInRect(point.get(), &rectangle);
 		}
 		
@@ -1727,7 +1727,7 @@ class Circle: public Shape {
 		/**
 		 * Returns true if the given Point is contained within the circle.
 		 */
-		bool contains(const Point& p) const noexcept {
+		bool contains(const Point& p) const noexcept override {
 			return point.get_distance(p) <= radius;
 		}
 		
@@ -3030,7 +3030,7 @@ class BasicRenderer: public Renderer {
 			int width,
 			int height,
 			int separation = 0
-		) const noexcept {
+		) const noexcept override {
 			int length = text.length();
 			
 			if (length) {
@@ -3167,7 +3167,7 @@ class FullRenderer: public Renderer {
 			int width,
 			int height,
 			int separation = 0
-		) const noexcept {
+		) const noexcept override {
 			int length = text.length();
 			
 			if (length) {
@@ -3888,6 +3888,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.0.3.1:
+       Marked pure virtual method implementations with override.
      v4.0.3:
        Added Event::window_width() and Event::window_height().
        Display::resize() now takes two arguments (use the returned values of Event::window_*()).
