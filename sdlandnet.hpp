@@ -9,12 +9,13 @@
 #include <stdexcept>
 #include <cmath>
 #include <ctime>
+#include <chrono>
 #include <limits>
 #include <random>
 #include <SDL.h>
 #include <SDL_net.h>
 
-// System, Timer, and Random
+// System, Timer, and Pseudo-Random Number Generation
 //{
 /**
  * A namespace for initialisation and shutdown functions.
@@ -24,7 +25,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 0, 3, 1};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 1, 0, 1};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -136,7 +137,9 @@ namespace Timer {
 	 * All times returned are relative to each other.
 	 */
 	double time() noexcept {
-		return static_cast<double>(clock()) / CLOCKS_PER_SEC;
+		return static_cast<std::chrono::duration<double>>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
 	}
 
 	/**
@@ -219,6 +222,52 @@ namespace Random {
     
     #undef RANDOM_ASSERTION
 }
+
+/**
+ * A class that encapsulates the functionality of the Random namespace with an internal generator.
+ */
+class RNG {
+    public:
+        /**
+         * Seeds the instance with the current time.
+         */
+        RNG() noexcept:
+            generator(Timer::current())
+        {}
+        
+        /**
+         * Seeds the instance with the given value.
+         */
+        RNG(int seed) noexcept:
+            generator(seed)
+        {}
+        
+        /**
+         * A method that returns a random integer in the interval [min, max].
+         * This method is a cross-platform replacement for std::uniform_int_distribution.
+         */
+        int get_int(int min, int max) {
+            return Random::get_int(generator, min, max);
+        }
+        
+        /**
+         * A method that returns a random real number in the interval [min, max).
+         * This method is a cross-platform replacement for std::uniform_real_distribution.
+         */
+        double get_real(double min, double max) {
+            return Random::get_real(generator, min, max);
+        }
+        
+        /**
+         * A method that returns a random real number in the interval [min, max].
+         */
+        double get_double(double min, double max) {
+            return Random::get_double(generator, min, max);
+        }
+        
+    private:
+        std::mt19937 generator;
+};
 //}
 
 // Event Mangement
@@ -3888,6 +3937,10 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.1.0.1:
+       Fixed Timer::time() to match the wall time in variable clock speed environments.
+     v4.1:
+       Added the RNG class.
      v4.0.3.1:
        Marked pure virtual method implementations with override.
      v4.0.3:
