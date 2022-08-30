@@ -25,7 +25,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 1, 0, 1};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 1, 1, 0};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -429,7 +429,7 @@ class Point {
 /**
  * A namespace for event handling functions.
  * Contains aliases for various mouse buttons and keyboard scan codes.
- * The Event class is the preferred method for event handling.
+ * The Event class is the preferred method for event handling, as some platforms require event polling.
  */
 namespace Events {
     // Constants
@@ -510,6 +510,20 @@ namespace Events {
 	
     // Keyboard
     //{
+    /**
+     * Opens up the virtual keyboard for platforms that offer it.
+     */
+    void start_keyboard() noexcept {
+        SDL_StartTextInput();
+    }
+    
+    /**
+     * Closes the keyboard opened by start_keyboard().
+     */
+    void stop_keyboard() noexcept {
+        SDL_StopTextInput();
+    }
+    
 	/**
 	 * Returns true if the given key is being pressed.
 	 */
@@ -675,7 +689,7 @@ bool Point::unclick(int button = Events::LEFT_CLICK) noexcept {
 
 /**
  * A class that defines an event.
- * This is the preferred method for event handling.
+ * This is the preferred method for event handling, as some platforms require event polling.
  */
 class Event {
     public:
@@ -3937,6 +3951,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.1.1:
+       Added Events::start_keyboard() and Events::stop_keyboard().
      v4.1.0.1:
        Fixed Timer::time() to match the wall time in variable clock speed environments.
      v4.1:
