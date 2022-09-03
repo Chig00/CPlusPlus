@@ -25,7 +25,7 @@ namespace System {
     //{
 	// The current version of the library.
 	constexpr int VERSION_LENGTH = 4;
-	constexpr int VERSION[VERSION_LENGTH] = {4, 1, 1, 0};
+	constexpr int VERSION[VERSION_LENGTH] = {4, 1, 1, 1};
 	
 	// The number of letters and numbers.
 	constexpr int LETTERS = 26;
@@ -736,6 +736,8 @@ class Event {
          * The event is removed.
          * Halts thread execution while the event queue is empty.
          * Throws an exception upon error.
+         * Provides very poor performance with many events in quick succession.
+         * For this reason, poll() is preferred in most circumstances.
          */
         void wait() {
             bool error = !SDL_WaitEvent(&event);
@@ -753,6 +755,8 @@ class Event {
          * Halts thread execution while the event queue is
          *   empty for the time given (in milliseconds).
          * Returns false if time ran out or an error occurred.
+         * Provides very poor performance with many events in quick succession.
+         * For this reason, poll() is preferred in most circumstances.
          */
         bool timed_wait(int ms) noexcept {
             bool pending = SDL_WaitEventTimeout(&event, ms);
@@ -3951,6 +3955,8 @@ class BridgeThread: public Bridge {
 //}
 
 /* CHANGELOG:
+     v4.1.1.1:
+       Commented on Event::wait() and Event::timed_wait(), explaining why Event::poll() should be used instead.
      v4.1.1:
        Added Events::start_keyboard() and Events::stop_keyboard().
      v4.1.0.1:
