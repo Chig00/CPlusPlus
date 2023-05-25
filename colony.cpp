@@ -6,6 +6,7 @@ constexpr int WIDTH = 800;
 constexpr int HEIGHT = 800;
 constexpr int QUIT_KEY = Events::ESCAPE;
 constexpr int RESET_KEY = Events::LETTERS['R' - 'A'];
+constexpr int KILL_KEY = Events::LETTERS['K' - 'A'];
 constexpr int CELL_WIDTH = 8;
 constexpr int CELL_HEIGHT = 8;
 constexpr int COLOUR_MIN = 3;
@@ -126,10 +127,12 @@ class Cell {
 int main(int argc, char** argv) {
     double split_rate;
     double death_rate;
+    double kill_rate;
     
     if (argc > 2) {
         split_rate = std::stod(argv[1]);
         death_rate = std::stod(argv[2]);
+        kill_rate = std::stod(argv[3]);
     }
     
     else {
@@ -137,6 +140,8 @@ int main(int argc, char** argv) {
         std::cin >> split_rate;
         std::cout << "Death Rate: ";
         std::cin >> death_rate;
+        std::cout << "Kill Rate: ";
+        std::cin >> kill_rate;
     }
     
     System::initialise();
@@ -195,16 +200,25 @@ int main(int argc, char** argv) {
             while (!end && event.poll()) {
                 switch (event.type()) {
                     case Event::TERMINATE:
-                            end = true;
-                            break;
+                        end = true;
+                        break;
                     
                     case Event::LEFT_UNCLICK:
                         paused = !paused;
                         break;
                     
-                    case Event::RIGHT_UNCLICK:
+                    case Event::MIDDLE_UNCLICK:
                         cells.clear();
                         cells.push_back(Cell());
+                        break;
+                    
+                    case Event::RIGHT_UNCLICK:
+                        for (int i = cells.size() - 1; i >= 0; --i) {
+                            if (generator.get_real(0, 1) < kill_rate) {
+                                cells.erase(cells.begin() + i);
+                            }
+                        }
+                        
                         break;
                     
                     case Event::KEY_RELEASE:
@@ -215,6 +229,14 @@ int main(int argc, char** argv) {
                         else if (event.key() == RESET_KEY) {
                             cells.clear();
                             cells.push_back(Cell());
+                        }
+                        
+                        else if (event.key() == KILL_KEY) {
+                            for (int i = cells.size() - 1; i >= 0; --i) {
+                                if (generator.get_real(0, 1) < kill_rate) {
+                                    cells.erase(cells.begin() + i);
+                                }
+                            }
                         }
                         
                         else {
